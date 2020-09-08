@@ -25,8 +25,9 @@ name varchar(255));
 
 local queries = {
 	NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
+	SelectName = sql:prepare("SELECT `name` FROM damagelog_names WHERE steamid = ? LIMIT 1;"),
 	SelectAutoSlays = sql:prepare("SELECT IFNULL(`slays`, 0) FROM `damagelog_autoslay` WHERE `ply` = ? LIMIT 1;"),
-	GetName = sql:prepare("SELECT name FROM damagelog_names WHERE steamid = ? LIMIT 1;")
+	GetName = sql:prepare("SELECT IFNULL(`name`, \"<error>\") FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1;")
 }
 local function damagelogNames(ply, steamid)
 	for _, v in ipairs(player.GetHumans()) do
@@ -64,14 +65,15 @@ function Damagelog:GetName(steamid)
 	local ply = player.GetBySteamID(steamid)
 	if ply then return ply end
 
-	local query = sql.QueryValue("SELECT name FROM damagelog_names WHERE steamid = '" .. steamid .. "' LIMIT 1;")
-	return query or "<Error>"
+	queries.SelectName:setString(1, steamid)
+	queries.SelectName:start()
+	return queries.SelectName:getData()
 end
 
 function Damagelog.SlayMessage(ply, message)
-		net.Start("DL_SlayMessage")
-		net.WriteString(message)
-		net.Send(ply)
+	net.Start("DL_SlayMessage")
+	net.WriteString(message)
+	net.Send(ply)
 end
 
 function Damagelog:CreateSlayList(tbl)
@@ -92,49 +94,14 @@ function Damagelog:CreateSlayList(tbl)
 	end
 end
 
--- ty evolve
 function Damagelog:FormatTime(t)
 	if t < 0 then
 		-- 24 * 3600
 		-- 24 * 3600 * 7
 		-- 24 * 3600 * 30
 		return "Forever"
-	elseif t < 60 then
-		if t == 1 then
-			return "one second"
-		else
-			return t .. " seconds"
-		end
-	elseif t < 3600 then
-		if math.Round(t / 60) == 1 then
-			return "one minute"
-		else
-			return math.Round(t / 60) .. " minutes"
-		end
-	elseif t < 86400 then
-		if math.Round(t / 3600) == 1 then
-			return "one hour"
-		else
-			return math.Round(t / 3600) .. " hours"
-		end
-	elseif t < 604800 then
-		if math.Round(t / 86400) == 1 then
-			return "one day"
-		else
-			return math.Round(t / 86400) .. " days"
-		end
-	elseif t < 2592000 then
-		if math.Round(t / 604800) == 1 then
-			return "one week"
-		else
-			return math.Round(t / 604800) .. " weeks"
-		end
 	else
-		if math.Round(t / 2592000) == 1 then
-			return "one month"
-		else
-			return math.Round(t / 2592000) .. " months"
-		end
+		return string.NiceTime(t)
 	end
 end
 
