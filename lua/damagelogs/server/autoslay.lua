@@ -4,31 +4,31 @@ util.AddNetworkString("DL_AutoslaysLeft")
 util.AddNetworkString("DL_PlayerLeft")
 util.AddNetworkString("DL_SendJails")
 local mode = Damagelog.ULX_AutoslayMode
-
+local sql = Damagelog.database
 if mode ~= 1 and mode ~= 2 then
     return
 end
 
 local aslay = mode == 1
 
-if not sql.TableExists("damagelog_autoslay") then
-    sql.Query([[CREATE TABLE damagelog_autoslay (
-		ply varchar(32) NOT NULL,
-		admins tinytext NOT NULL,
-		slays SMALLINT UNSIGNED NOT NULL,
-		reason tinytext NOT NULL,
-		time BIGINT UNSIGNED NOT NULL);
-	]])
-end
+sql:query([[CREATE TABLE IF NOT EXISTS damagelog_autoslay (
+ply varchar(32) NOT NULL,
+admins tinytext NOT NULL,
+slays SMALLINT UNSIGNED NOT NULL,
+reason tinytext NOT NULL,
+time BIGINT UNSIGNED NOT NULL);
 
-if not sql.TableExists("damagelog_names") then
-    sql.Query([[CREATE TABLE damagelog_names (
-		steamid varchar(32),
-		name varchar(255));
-	]])
-end
+CREATE TABLE IF NOT EXISTS damagelog_names (
+steamid varchar(32),
+name varchar(255));
+]])
 
-hook.Add("PlayerAuthed", "DamagelogNames", function(ply, steamid)
+local queries = {
+  NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
+  SelectAutoSlays = sql:prepare("SELECT IFNULL(`slays`, 0) FROM `damagelog_autoslay` WHERE `ply` = ? LIMIT 1;"),
+  GetName = sql:prepare("SELECT name FROM damagelog_names WHERE steamid = ? LIMIT 1;")
+}
+local function damagelogNames(ply, steamid)
     for _, v in ipairs(player.GetHumans()) do
         if v ~= ply then
             net.Start("DL_AutoslaysLeft")
@@ -39,37 +39,29 @@ hook.Add("PlayerAuthed", "DamagelogNames", function(ply, steamid)
     end
 
     local name = ply:Nick()
-    local query = sql.QueryValue("SELECT name FROM damagelog_names WHERE steamid = '" .. steamid .. "' LIMIT 1")
+    queries.NameUpdate:setString(1, steamid)
+    queries.NameUpdate:setString(2, name)
+    queries.NameUpdate:setString(3, name)
+    queries.NameUpdate:start()
 
-    if not query then
-        sql.Query("INSERT INTO damagelog_names (`steamid`, `name`) VALUES('" .. steamid .. "', " .. sql.SQLStr(name) .. ");")
-    elseif query ~= name then
-        sql.Query("UPDATE damagelog_names SET name = " .. sql.SQLStr(name) .. " WHERE steamid = '" .. steamid .. "' LIMIT 1;")
-    end
-
-    local c = sql.Query("SELECT slays FROM damagelog_autoslay WHERE ply = '" .. steamid .. "' LIMIT 1;")
-
-    if not tonumber(c) then
-        c = 0
-    end
+    queries.SelectAutoSlays:setString(1, steamid)
+    queries.SelectAutoSlays:start()
+    local c = tonumber(queries.SelectAutoSlays:getData())
 
     ply.AutoslaysLeft = c
     net.Start("DL_AutoslaysLeft")
     net.WriteEntity(ply)
     net.WriteUInt(c, 32)
     net.Broadcast()
-end)
+end
+hook.Add("PlayerAuthed", "DamagelogNames", damagelogNames)
 
 function Damagelog:GetName(steamid)
-    for _, v in ipairs(player.GetHumans()) do
-        if v:SteamID() == steamid then
-            return v:Nick()
-        end
-    end
+  local ply = player.GetBySteamID(steamid)
+  if ply then return ply end
 
-    local query = sql.QueryValue("SELECT name FROM damagelog_names WHERE steamid = '" .. steamid .. "' LIMIT 1;")
-
-    return query or "<Error>"
+  local query = sql.QueryValue("SELECT name FROM damagelog_names WHERE steamid = '" .. steamid .. "' LIMIT 1;")
+  return query or "<Error>"
 end
 
 function Damagelog.SlayMessage(ply, message)
