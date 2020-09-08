@@ -33,11 +33,6 @@ Damagelog.RDM_Manager_Enabled = true
 Damagelog.RDM_Manager_Command = "!report"
 -- Command to open the respond menu while you're alive
 Damagelog.Respond_Command = "!respond"
---[[Set to true if you want to enable MySQL (it needs to be configured on config/mysqloo.lua)
-	Setting it to false will make the logs use SQLite (garrysmod/sv.db)
-]]
---
-Damagelog.Use_MySQL = false
 --[[Autoslay and Autojail Mode
 REQUIRES ULX ! If you are using ServerGuard, set this to 0 (it will use ServerGuard's autoslay automatically)
 - 0 : Disables autoslay
@@ -81,7 +76,7 @@ Damagelog.Ban_DefaultReason12 = "spam"
 -- The number of days the logs last on the database (to avoid lags when opening the menu)
 Damagelog.LogDays = 61
 -- Hide the Donate button on the top-right corner
-Damagelog.HideDonateButton = false
+Damagelog.HideDonateButton = true
 -- Use the Workshop to download content files
 Damagelog.UseWorkshop = true
 -- Force a language - When empty use user-defined language
