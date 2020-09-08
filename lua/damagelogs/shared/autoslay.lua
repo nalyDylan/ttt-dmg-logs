@@ -184,8 +184,8 @@ if CLIENT then
     end)
 
     net.Receive("DL_AutoSlaysLeft", function()
-        local ply = net.ReadEntity()
-        local slays = net.ReadUInt(32)
+        local ply = Player(net.ReadUInt(12))
+        local slays = net.ReadUInt(4)
 
         if not IsValid(ply) or not ply:IsPlayer() or not slays then
             return
