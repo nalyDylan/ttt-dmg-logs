@@ -252,6 +252,9 @@ net.Receive("DL_SendChatMessage", function(_len, ply)
     net.WriteString(message)
     net.Send(GetFilter(chat))
 end)
+--[[
+TODO: the variable id in v2:UpdateReport(false, id) isn't defined in this function and so is being a globalized and is nil.
+        So, this well intentioned function doesn't work atm. it should probably be k instead of id?
 
 hook.Add("PlayerDisconnected", "Damagelog_Chat", function(ply)
     for k, v in pairs(Damagelog.Reports.Current) do
@@ -280,6 +283,7 @@ hook.Add("PlayerDisconnected", "Damagelog_Chat", function(ply)
         end
     end
 end)
+]]
 
 net.Receive("DL_AddChatPlayer", function(_len, ply)
     local id = net.ReadUInt(32)
