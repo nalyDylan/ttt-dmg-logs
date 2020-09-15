@@ -16,6 +16,11 @@ local queries = {
 	NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
 	SelectName = sql:prepare("SELECT `name` FROM damagelog_names WHERE steamid = ? LIMIT 1;"),
 	SelectAutoSlays = sql:prepare("SELECT IFNULL((SELECT `slays` FROM `damagelog_autoslay` WHERE `ply` = ?), '0');"),
+	SelectAutoSlayAll = sql:prepare("SELECT * FROM `damagelog_autoslay` WHERE ply=? LIMIT 1"),
+	DeleteAutoSlay = sql:prepare("DELETE FROM `damagelog_autoslay` WHERE `ply` = ?;"),
+	UpdateAutoSlay = sql:prepare("UPDATE `damagelog_autoslay` SET `admins` = ?, `slays` = ?, `reason` = ?, `time` = ? WHERE `ply` = ? LIMIT 1;"),
+	InsertAutoSlay = sql:prepare("INSERT INTO `damagelog_autoslay` (`admins`, `ply`, `slays`, `reason`, `time`) VALUES (?, ?, ?, ?, ?);"),
+	DecrementAutoSlay = sql:prepare("UPDATE damagelog_autoslay SET slays = slays - 1 WHERE ply = ?;"),
 	GetName = sql:prepare("SELECT IFNULL((SELECT `name` FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1), \"<error>\");")
 }
 
@@ -120,8 +125,8 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 	end
 
 	if slays == 0 then
-		sql.Query("DELETE FROM damagelog_autoslay WHERE ply = '" .. steamid .. "';")
-		local name = self:GetName(steamid)
+		queries.DeleteAutoSlay:setString(1, steamid)
+		queries.start()
 
 		if target then
 			ulx.fancyLogAdmin(admin, aslay and "#A removed the autoslays of #T." or "#A removed the autojails of #T.", target)
@@ -131,7 +136,8 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 
 		NetworkSlays(steamid, 0)
 	else
-		local data = sql.QueryRow("SELECT * FROM damagelog_autoslay WHERE ply = '" .. steamid .. "' LIMIT 1")
+		queries.SelectAutoSlayAll:setString(1, steamid)
+		local data = queries.SelectAutoSlayAll:getData()
 
 		if data then
 			local adminid
@@ -152,7 +158,6 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 
 			if old_slays == slays then
 				local list = self:CreateSlayList(old_steamids)
-				local nick = self:GetName(steamid)
 				local msg
 
 				if target then
@@ -174,9 +179,13 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 				end
 			else
 				local difference = slays - old_slays
-				sql.Query(string.format("UPDATE damagelog_autoslay SET admins = %s, slays = %i, reason = %s, time = %s WHERE ply = '%s' LIMIT 1;", sql.SQLStr(new_admins), slays, sql.SQLStr(reason), tostring(os.time()), steamid))
+				queries.UpdateAutoSlay:setString(1, new_admins)
+				queries.UpdateAutoSlay:setNumber(2, slays)
+				queries.UpdateAutoSlay:setString(3, reason)
+				queries.UpdateAutoSlay:setString(4, tostring(os.time()))
+				queries.UpdateAutoSlay:setString(5, steamid)
+				queries.UpdateAutoSlay:start()
 				local list = self:CreateSlayList(old_steamids)
-				local nick = self:GetName(steamid)
 				local msg
 
 				if target then
@@ -208,7 +217,13 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 				admins = util.TableToJSON({"Console"})
 			end
 
-			sql.Query(string.format("INSERT INTO damagelog_autoslay (`admins`, `ply`, `slays`, `reason`, `time`) VALUES (%s, '%s', %i, %s, %s);", sql.SQLStr(admins), steamid, slays, sql.SQLStr(reason), tostring(os.time())))
+			queries.InsertAutoSlay:setString(1, admins)
+			queries.InsertAutoSlay:setString(2, steamid)
+			queries.InsertAutoSlay:setNumber(3, slays)
+			queries.InsertAutoSlay:setString(4, reason)
+			queries.InsertAutoSlay:setString(5, tostring(os.time()))
+			queries.InsertAutoSlay:start()
+
 			local msg
 
 			if target then
@@ -286,7 +301,8 @@ hook.Add("TTTBeginRound", "Damagelog_AutoSlay", function()
 				v:SetNWBool("PlayedSRound", true)
 			end)
 
-			local data = sql.QueryRow("SELECT * FROM damagelog_autoslay WHERE ply = '" .. v:SteamID() .. "' LIMIT 1")
+			queries.SelectAutoSlayAll:setString(1, steamid)
+			local data = queries.SelectAutoSlayAll:getData()
 
 			if data then
 				if aslay then
@@ -356,11 +372,13 @@ hook.Add("TTTBeginRound", "Damagelog_AutoSlay", function()
 				slays = slays - 1
 
 				if slays <= 0 then
-					sql.Query("DELETE FROM damagelog_autoslay WHERE ply = '" .. v:SteamID() .. "';")
+					queries.DeleteAutoSlay:setString(1, v:SteamID())
+					queries.DeleteAutoSlay:start()
 					NetworkSlays(steamid, 0)
 					v.AutoslaysLeft = 0
 				else
-					sql.Query("UPDATE damagelog_autoslay SET slays = slays - 1 WHERE ply = '" .. v:SteamID() .. "';")
+					queries.DecrementAutoSlay:setString(1, v:SteamID())
+					queries.DecrementAutoSlay:start()
 					NetworkSlays(steamid, slays - 1)
 
 					if tonumber(v.AutoslaysLeft) then
