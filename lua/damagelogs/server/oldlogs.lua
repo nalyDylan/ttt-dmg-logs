@@ -20,7 +20,19 @@ Damagelog.database = mysqloo.connect(info.ip, info.username, info.password, info
 
 Damagelog.database.onConnected = function(self)
 Damagelog.MySQL_Connected = true
-local create_table1 = self:query([[CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
+local create_table1 = self:query([[
+    CREATE TABLE IF NOT EXISTS damagelog_autoslay (
+    ply varchar(32) NOT NULL,
+    admins tinytext NOT NULL,
+    slays SMALLINT UNSIGNED NOT NULL,
+    reason tinytext NOT NULL,
+    time BIGINT UNSIGNED NOT NULL);
+
+    CREATE TABLE IF NOT EXISTS damagelog_names (
+    steamid varchar(32),
+    name varchar(255));
+
+    CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
 	id INT UNSIGNED NOT NULL AUTO_INCREMENT,
 	year INTEGER NOT NULL,
 	month INTEGER NOT NULL,
