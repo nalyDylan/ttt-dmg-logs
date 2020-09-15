@@ -13,7 +13,7 @@ This is an update of Tommy228's damagelog addon, the goal here is to optimize th
 - Punishment options: Autoslay and Autojail
 - Visual Deathscene
 - Translation support: English, German, French, Russian and Polish
-- Storage support for MySQL and SQLite
+- Storage support for MySQL
 - Support for ULX and Serverguard: User groups and RDM punishments
 - Easy configuration via config file and F1 settings menu
 
