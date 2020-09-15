@@ -1,5 +1,5 @@
 local PANEL = {}
-local GRADIENT = surface.GetTextureID("gui/gradient_down")
+--local GRADIENT = surface.GetTextureID("gui/gradient_down")
 local color_halfwhite = Color(255, 255, 255, 50)
 
 function PANEL:Init()
