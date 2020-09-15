@@ -11,35 +11,40 @@ end
 
 local aslay = mode == 1
 
-sql:query([[CREATE TABLE IF NOT EXISTS damagelog_autoslay (
-ply varchar(32) NOT NULL,
-admins tinytext NOT NULL,
-slays SMALLINT UNSIGNED NOT NULL,
-reason tinytext NOT NULL,
-time BIGINT UNSIGNED NOT NULL);
-
-CREATE TABLE IF NOT EXISTS damagelog_names (
-steamid varchar(32),
-name varchar(255));
-]])
 
 local queries = {
 	NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
 	SelectName = sql:prepare("SELECT `name` FROM damagelog_names WHERE steamid = ? LIMIT 1;"),
-	SelectAutoSlays = sql:prepare("SELECT IFNULL(`slays`, 0) FROM `damagelog_autoslay` WHERE `ply` = ? LIMIT 1;"),
-	GetName = sql:prepare("SELECT IFNULL(`name`, \"<error>\") FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1;")
+	SelectAutoSlays = sql:prepare("SELECT IFNULL((SELECT `slays` FROM `damagelog_autoslay` WHERE `ply` = ?), '0');"),
+	GetName = sql:prepare("SELECT IFNULL((SELECT `name` FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1), \"<error>\");")
 }
-local function damagelogNames(ply, steamid)
+
+local function fullUpdate(ply, steamid)
+	local ids = {}
+	local c
 	for _, v in ipairs(player.GetHumans()) do
 		if v ~= ply then
-			--reducing this to 16 bits per player instead of an entire entity + 32 bit UInt
-			--2^12 is 4096, if your server has been on this long you're having bigger issues
-			net.Start("DL_AutoslaysLeft")
-			net.WriteUInt(v:UserID(), 12)
-			net.WriteUInt(v.AutoslaysLeft or 0, 4)
-			net.Broadcast()
+			table.insert(ids, {v:UserID(), v.AutoslaysLeft or 0})
+		else
+			queries.SelectAutoSlays:setString(1, steamid)
+			queries.SelectAutoSlays:start()
+			c = tonumber(queries.SelectAutoSlays:getData() or 0)
+			ply.AutoslaysLeft = c
+			table.insert(ids, {v:UserID(), c})
 		end
 	end
+	for _,v in ipairs(ids) do
+		--reducing this to 16 bits per player instead of an entire entity + 32 bit UInt
+		--2^12 is 4096, if your server has been on this long you're having bigger issues
+		net.Start("DL_AutoslaysLeft")
+		net.WriteUInt(v[1], 12)
+		net.WriteUInt(v[2], 4)
+		net.Send(ply)
+	end
+end
+local function damagelogNames(ply, steamid)
+	--send new players a list of data to seed from
+	fullUpdate(ply, steamid)
 
 	--update the players name in the database for logging reasons
 	local name = ply:Nick()
@@ -48,16 +53,6 @@ local function damagelogNames(ply, steamid)
 	queries.NameUpdate:setString(3, name)
 	queries.NameUpdate:start()
 
-	--get the number of autoslays left on this player
-	queries.SelectAutoSlays:setString(1, steamid)
-	queries.SelectAutoSlays:start()
-	local c = tonumber(queries.SelectAutoSlays:getData())
-
-	ply.AutoslaysLeft = c
-	net.Start("DL_AutoslaysLeft")
-	net.WriteUInt(ply:UserID(), 12)
-	net.WriteUInt(c, 4)
-	net.Broadcast()
 end
 hook.Add("PlayerAuthed", "DamagelogNames", damagelogNames)
 
