@@ -14,7 +14,7 @@ local aslay = mode == 1
 
 local queries = {
 	NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
-	SelectName = sql:prepare("SELECT `name` FROM damagelog_names WHERE steamid = ? LIMIT 1;"),
+	SelectName = sql:prepare("SELECT `name` FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1;"),
 	SelectAutoSlays = sql:prepare("SELECT IFNULL((SELECT `slays` FROM `damagelog_autoslay` WHERE `ply` = ?), '0');"),
 	SelectAutoSlayAll = sql:prepare("SELECT * FROM `damagelog_autoslay` WHERE ply=? LIMIT 1"),
 	DeleteAutoSlay = sql:prepare("DELETE FROM `damagelog_autoslay` WHERE `ply` = ?;"),
@@ -38,6 +38,7 @@ local function fullUpdate(ply, steamid)
 			table.insert(ids, {v:UserID(), c})
 		end
 	end
+	--at some point I should probably just make this a single net message
 	for _,v in ipairs(ids) do
 		--reducing this to 16 bits per player instead of an entire entity + 32 bit UInt
 		--2^12 is 4096, if your server has been on this long you're having bigger issues
@@ -301,7 +302,7 @@ hook.Add("TTTBeginRound", "Damagelog_AutoSlay", function()
 				v:SetNWBool("PlayedSRound", true)
 			end)
 
-			queries.SelectAutoSlayAll:setString(1, steamid)
+			queries.SelectAutoSlayAll:setString(1, v:SteamID())
 			local data = queries.SelectAutoSlayAll:getData()
 
 			if data then
