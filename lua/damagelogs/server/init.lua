@@ -68,7 +68,7 @@ Damagelog.OldTables = Damagelog.OldTables or {}
 Damagelog.ShootTables = Damagelog.ShootTables or {}
 Damagelog.Roles = Damagelog.Roles or {}
 Damagelog.SceneRounds = Damagelog.SceneRounds or {}
-
+Damagelog.Queries = {}
 net.Receive("DL_SendLang", function(_, ply)
     ply.DMGLogLang = net.ReadString()
 end)
@@ -191,6 +191,7 @@ function Damagelog:WeaponFromDmg(dmg)
     end
 end
 
+
 function Damagelog:SendDamagelog(ply, round)
     if self.MySQL_Error and not ply.DL_MySQL_Error then
         Damagelog:Error(debug.getinfo(1).source, debug.getinfo(1).currentline, "mysql connection error")
@@ -207,49 +208,28 @@ function Damagelog:SendDamagelog(ply, round)
         end
 
         if not Damagelog.PreviousMap then
-            if Damagelog.Use_MySQL then
-                local query = self.database:query("SELECT damagelog FROM damagelog_oldlogs_v3 WHERE date = " .. self.last_round_map .. ";")
+            local query = self.database:query("SELECT damagelog FROM damagelog_oldlogs_v3 WHERE date = " .. self.last_round_map .. ";")
 
-                query.onSuccess = function(q)
-                    local data = q:getData()
+            query.onSuccess = function(q)
+                local data = q:getData()
 
-                    if data and data[1] then
-                        local encoded = data[1]["damagelog"]
-                        local decoded = util.JSONToTable(encoded)
+                if data and data[1] then
+                    local encoded = data[1]["damagelog"]
+                    local decoded = util.JSONToTable(encoded)
 
-                        if not decoded then
-                            decoded = {
-                                Roles = {},
-                                ShootTables = {},
-                                DamageTable = {}
-                            }
-                        end
-
-                        self:TransferLogs(decoded.DamageTable, ply, round, decoded.Roles)
-                        Damagelog.PreviousMap = decoded
+                    if not decoded then
+                        decoded = {
+                            Roles = {},
+                            ShootTables = {},
+                            DamageTable = {}
+                        }
                     end
+
+                    self:TransferLogs(decoded.DamageTable, ply, round, decoded.Roles)
+                    Damagelog.PreviousMap = decoded
                 end
 
                 query:start()
-            else
-                local query = sql.QueryValue("SELECT damagelog FROM damagelog_oldlogs_v3 WHERE date = " .. self.last_round_map)
-
-                if not query then
-                    return
-                end
-
-                local decoded = util.JSONToTable(query)
-
-                if not decoded then
-                    decoded = {
-                        Roles = {},
-                        ShootTables = {},
-                        DamageTable = {}
-                    }
-                end
-
-                self:TransferLogs(decoded.DamageTable, ply, round, decoded.Roles)
-                Damagelog.PreviousMap = decoded
             end
         else
             self:TransferLogs(Damagelog.PreviousMap.DamageTable, ply, round, Damagelog.PreviousMap.Roles)

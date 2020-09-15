@@ -11,161 +11,106 @@ local function GetLogsCount_SQLite()
     return sql.QueryValue("SELECT COUNT(id) FROM damagelog_oldlogs_v3")
 end
 
-if Damagelog.Use_MySQL then
-    require("mysqloo")
-    include("damagelogs/config/mysqloo.lua")
-    Damagelog.MySQL_Error = nil
-    file.Delete("damagelog/mysql_error.txt")
-    local info = Damagelog.MySQL_Informations
-    Damagelog.database = mysqloo.connect(info.ip, info.username, info.password, info.database, info.port)
+require("mysqloo")
+include("damagelogs/config/mysqloo.lua")
+Damagelog.MySQL_Error = nil
+file.Delete("damagelog/mysql_error.txt")
+local info = Damagelog.MySQL_Informations
+Damagelog.database = mysqloo.connect(info.ip, info.username, info.password, info.database, info.port)
 
-    Damagelog.database.onConnected = function(self)
-        Damagelog.MySQL_Connected = true
-        local create_table1 = self:query([[CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
-			id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-			year INTEGER NOT NULL,
-			month INTEGER NOT NULL,
-			day INTEGER NOT NULL,
-			date INTEGER NOT NULL,
-			map TINYTEXT NOT NULL,
-			round TINYINT NOT NULL,
-			damagelog BLOB NOT NULL,
-			PRIMARY KEY (id));
-		]])
-        create_table1:start()
-        local create_table2 = self:query([[CREATE TABLE IF NOT EXISTS damagelog_weapons (
-			class varchar(255) NOT NULL,
-			name varchar(255) NOT NULL,
-			PRIMARY KEY (class));
-		]])
-        create_table2:start()
-        local list = self:query("SELECT MIN(date), MAX(date) FROM damagelog_oldlogs_v3;")
+Damagelog.database.onConnected = function(self)
+Damagelog.MySQL_Connected = true
+local create_table1 = self:query([[CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
+	id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	year INTEGER NOT NULL,
+	month INTEGER NOT NULL,
+	day INTEGER NOT NULL,
+	date INTEGER NOT NULL,
+	map TINYTEXT NOT NULL,
+	round TINYINT NOT NULL,
+	damagelog BLOB NOT NULL,
+	PRIMARY KEY (id));
+    
+    CREATE TABLE IF NOT EXISTS damagelog_weapons (
+	class varchar(255) NOT NULL,
+	name varchar(255) NOT NULL,
+	PRIMARY KEY (class));
+]])
+create_table1:start()
+local list = self:query("SELECT MIN(date), MAX(date) FROM damagelog_oldlogs_v3;")
 
-        list.onSuccess = function(query)
-            local data = query:getData()
+list.onSuccess = function(query)
+    local data = query:getData()
 
-            if not data[1] then
-                return
-            end
-
-            Damagelog.OlderDate = data[1]["MIN(date)"]
-            Damagelog.LatestDate = data[1]["MAX(date)"]
-        end
-
-        list:start()
-        local delete_old = self:query("DELETE FROM damagelog_oldlogs_v3 WHERE date <= " .. limit .. ";")
-        delete_old:start()
-        Damagelog.OldLogsDays = {}
-        local yearsQuery = self:query("SELECT DISTINCT year FROM damagelog_oldlogs_v3;")
-
-        yearsQuery.onSuccess = function(yearsQuery)
-            local years = yearsQuery:getData()
-
-            for _, year in pairs(years) do
-                local y = tonumber(year.year)
-
-                if y then
-                    Damagelog.OldLogsDays[y] = {}
-                    local monthQuery = self:query("SELECT DISTINCT month FROM damagelog_oldlogs_v3;")
-
-                    monthQuery.onSuccess = function(monthQuery)
-                        local months = monthQuery:getData()
-
-                        for _, month in pairs(months) do
-                            local m = tonumber(month.month)
-
-                            if m then
-                                Damagelog.OldLogsDays[y][m] = {}
-                                local dayQuery = self:query("SELECT DISTINCT day FROM damagelog_oldlogs_v3;")
-
-                                dayQuery.onSuccess = function(dayQuery)
-                                    local days = dayQuery:getData()
-
-                                    for _, day in pairs(days) do
-                                        local d = tonumber(day.day)
-
-                                        if d then
-                                            Damagelog.OldLogsDays[y][m][d] = true
-                                        end
-                                    end
-                                end
-
-                                dayQuery:start()
-                            end
-                        end
-                    end
-
-                    monthQuery:start()
-                end
-            end
-        end
-
-        yearsQuery:start()
+    if not data[1] then
+        return
     end
 
-    Damagelog.database.onConnectionFailed = function(self, err)
-        file.Write("damagelog/mysql_error.txt", err)
-        Damagelog.MySQL_Error = err
-    end
+    Damagelog.OlderDate = data[1]["MIN(date)"]
+    Damagelog.LatestDate = data[1]["MAX(date)"]
+end
+list:start()
+local delete_old = self:query("DELETE FROM damagelog_oldlogs_v3 WHERE date <= " .. limit .. ";")
+delete_old:start()
+Damagelog.OldLogsDays = {}
 
-    Damagelog.database:connect()
-    -- year/month/day are only here to send the list of days to the client
-    -- date is the UNIX TIME
-    -- Get the list of days and send it to the client
-else
-    if not sql.TableExists("damagelog_oldlogs_v3") then
-        sql.Query([[CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
-			id INT UNSIGNED NOT NULL PRIMARY KEY,
-			year INTEGER NOT NULL,
-			month INTEGER NOT NULL,
-			day INTEGER NOT NULL,
-			date INTEGER NOT NULL,
-			map TINYTEXT NOT NULL,
-			round TINYINT NOT NULL,
-			damagelog TEXT);
-		]])
-    end
 
-    if not sql.TableExists("damagelog_weapons") then
-        sql.Query([[CREATE TABLE IF NOT EXISTS damagelog_weapons (
-			class varchar(255) NOT NULL,
-			name varchar(255) NOT NULL,
-			PRIMARY KEY (class));
-		]])
-    end
-
-    Damagelog.OlderDate = tonumber(sql.QueryValue("SELECT MIN(date) FROM damagelog_oldlogs_v3 WHERE damagelog IS NOT NULL;"))
-    Damagelog.LatestDate = tonumber(sql.QueryValue("SELECT MAX(date) FROM damagelog_oldlogs_v3 WHERE damagelog IS NOT NULL;"))
-    sql.Query("DELETE FROM damagelog_oldlogs_v3 WHERE date <= " .. limit .. ";")
-    Damagelog.OldLogsDays = {}
-    local years = sql.Query("SELECT DISTINCT year FROM damagelog_oldlogs_v3;") or {}
+local yearsQuery = self:query("SELECT DISTINCT year FROM damagelog_oldlogs_v3;")
+yearsQuery.onSuccess = function(yearsQuery)
+    local years = yearsQuery:getData()
 
     for _, year in pairs(years) do
         local y = tonumber(year.year)
 
         if y then
             Damagelog.OldLogsDays[y] = {}
-            local months = sql.Query("SELECT DISTINCT month FROM damagelog_oldlogs_v3 WHERE year = " .. y .. ";") or {}
+            local monthQuery = self:query("SELECT DISTINCT month FROM damagelog_oldlogs_v3;")
 
-            for _, month in pairs(months) do
-                local m = tonumber(month.month)
+            monthQuery.onSuccess = function(monthQuery)
+                local months = monthQuery:getData()
 
-                if m then
-                    Damagelog.OldLogsDays[y][m] = {}
-                    local days = sql.Query("SELECT DISTINCT day FROM damagelog_oldlogs_v3 WHERE year = " .. y .. " AND month = " .. m .. ";") or {}
+                for _, month in pairs(months) do
+                    local m = tonumber(month.month)
 
-                    for _, day in pairs(days) do
-                        local d = tonumber(day.day)
+                    if m then
+                        Damagelog.OldLogsDays[y][m] = {}
+                        local dayQuery = self:query("SELECT DISTINCT day FROM damagelog_oldlogs_v3;")
 
-                        if d then
-                            Damagelog.OldLogsDays[y][m][d] = true
+                        dayQuery.onSuccess = function(dayQuery)
+                            local days = dayQuery:getData()
+
+                            for _, day in pairs(days) do
+                                local d = tonumber(day.day)
+
+                                if d then
+                                    Damagelog.OldLogsDays[y][m][d] = true
+                                end
+                            end
                         end
+
+                        dayQuery:start()
                     end
                 end
             end
+
+            monthQuery:start()
         end
     end
 end
+
+    yearsQuery:start()
+end
+
+Damagelog.database.onConnectionFailed = function(self, err)
+    file.Write("damagelog/mysql_error.txt", err)
+    Damagelog.MySQL_Error = err
+end
+
+Damagelog.database:connect()
+-- year/month/day are only here to send the list of days to the client
+-- date is the UNIX TIME
+-- Get the list of days and send it to the client
+
 
 if file.Exists("damagelog/damagelog_lastroundmap.txt", "DATA") then
     Damagelog.last_round_map = tonumber(file.Read("damagelog/damagelog_lastroundmap.txt", "DATA"))
