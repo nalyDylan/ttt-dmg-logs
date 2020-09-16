@@ -7,10 +7,6 @@ util.AddNetworkString("DL_SendOldLogRounds")
 Damagelog.previous_reports = {}
 local limit = os.time() - Damagelog.LogDays * 86400 --  24 * 60 * 60
 
-local function GetLogsCount_SQLite()
-    return sql.QueryValue("SELECT COUNT(id) FROM damagelog_oldlogs_v3")
-end
-
 require("mysqloo")
 include("damagelogs/config/mysqloo.lua")
 Damagelog.MySQL_Error = nil
@@ -35,10 +31,7 @@ local create_table1 = self:query([[
 
     CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
 	id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-	year INTEGER NOT NULL,
-	month INTEGER NOT NULL,
-	day INTEGER NOT NULL,
-	date INTEGER NOT NULL,
+	date DATETIME NOT NULL,
 	map TINYTEXT NOT NULL,
 	round TINYINT NOT NULL,
 	damagelog BLOB NOT NULL,
@@ -50,7 +43,7 @@ local create_table1 = self:query([[
 	PRIMARY KEY (class));
 ]])
 create_table1:start()
-local list = self:query("SELECT MIN(date), MAX(date) FROM damagelog_oldlogs_v3;")
+local list = self:query("SELECT MIN(date) as min, MAX(date) as max FROM damagelog_oldlogs_v3;")
 
 list.onSuccess = function(query)
     local data = query:getData()
@@ -59,60 +52,13 @@ list.onSuccess = function(query)
         return
     end
 
-    Damagelog.OlderDate = data[1]["MIN(date)"]
-    Damagelog.LatestDate = data[1]["MAX(date)"]
+    Damagelog.OlderDate = data[1]["min"]
+    Damagelog.LatestDate = data[1]["max"]
 end
 list:start()
 local delete_old = self:query("DELETE FROM damagelog_oldlogs_v3 WHERE date <= " .. limit .. ";")
 delete_old:start()
 Damagelog.OldLogsDays = {}
-
-
-local yearsQuery = self:query("SELECT DISTINCT year FROM damagelog_oldlogs_v3;")
-yearsQuery.onSuccess = function(yearsQuery)
-    local years = yearsQuery:getData()
-
-    for _, year in pairs(years) do
-        local y = tonumber(year.year)
-
-        if y then
-            Damagelog.OldLogsDays[y] = {}
-            local monthQuery = self:query("SELECT DISTINCT month FROM damagelog_oldlogs_v3;")
-
-            monthQuery.onSuccess = function(monthQuery)
-                local months = monthQuery:getData()
-
-                for _, month in pairs(months) do
-                    local m = tonumber(month.month)
-
-                    if m then
-                        Damagelog.OldLogsDays[y][m] = {}
-                        local dayQuery = self:query("SELECT DISTINCT day FROM damagelog_oldlogs_v3;")
-
-                        dayQuery.onSuccess = function(dayQuery)
-                            local days = dayQuery:getData()
-
-                            for _, day in pairs(days) do
-                                local d = tonumber(day.day)
-
-                                if d then
-                                    Damagelog.OldLogsDays[y][m][d] = true
-                                end
-                            end
-                        end
-
-                        dayQuery:start()
-                    end
-                end
-            end
-
-            monthQuery:start()
-        end
-    end
-end
-
-    yearsQuery:start()
-end
 
 Damagelog.database.onConnectionFailed = function(self, err)
     file.Write("damagelog/mysql_error.txt", err)
@@ -120,9 +66,6 @@ Damagelog.database.onConnectionFailed = function(self, err)
 end
 
 Damagelog.database:connect()
--- year/month/day are only here to send the list of days to the client
--- date is the UNIX TIME
--- Get the list of days and send it to the client
 
 
 if file.Exists("damagelog/damagelog_lastroundmap.txt", "DATA") then
@@ -144,15 +87,11 @@ hook.Add("TTTEndRound", "Damagelog_EndRound", function()
         local month = tonumber(os.date("%m"))
         local day = tonumber(os.date("%d"))
 
-        if Damagelog.Use_MySQL and Damagelog.MySQL_Connected then
+        if Damagelog.MySQL_Connected then
             local insert = string.format("INSERT INTO damagelog_oldlogs_v3(`year`, `month`, `day`, `date`, `round`, `map`, `damagelog`) VALUES(%i, %i, %i, %i, %i, \"%s\", COMPRESS(%s));", year, month, day, t, Damagelog.CurrentRound, game.GetMap(), sql.SQLStr(logs))
             local query = Damagelog.database:query(insert)
             query:start()
-        elseif not Damagelog.Use_MySQL then
-            local insert = string.format("INSERT INTO damagelog_oldlogs_v3(`id`, `year`, `month`, `day`, `date`, `round`, `map`, `damagelog`) VALUES(%i, %i, %i, %i, %i, %i, \"%s\", %s);", GetLogsCount_SQLite() + 1, year, month, day, t, Damagelog.CurrentRound, game.GetMap(), sql.SQLStr(logs))
-            sql.Query(insert)
         end
-
         file.Write("damagelog/damagelog_lastroundmap.txt", tostring(t))
     end
 end)
