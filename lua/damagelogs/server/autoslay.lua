@@ -22,7 +22,7 @@ Damagelog.queries = {
 	InsertAutoSlay = sql:prepare("INSERT INTO `damagelog_autoslay` (`admins`, `ply`, `slays`, `reason`, `time`) VALUES (?, ?, ?, ?, ?);"),
 	DecrementAutoSlay = sql:prepare("UPDATE `damagelog_autoslay` SET `slays` = `slays` - 1 WHERE `ply` = ?;"),
 	GetName = sql:prepare("SELECT IFNULL((SELECT `name` FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1), \"<error>\");"),
-	InsertOldLogs = sql:prepare("INSERT INTO damagelog_oldlogs_v3(`year`, `month`, `day`, `date`, `round`, `map`, `damagelog`) VALUES(?, ?, ?, ?, ?, ?, COMPRESS(?));")
+	InsertOldLogs = sql:prepare("INSERT INTO damagelog_oldlogs_v3(`date`, `round`, `map`, `damagelog`) VALUES(FROM_UNIXTIME(?), ?, ?, COMPRESS(?));")
 }
 
 local function fullUpdate(ply, steamid)
