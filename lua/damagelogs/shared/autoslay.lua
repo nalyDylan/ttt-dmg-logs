@@ -32,7 +32,9 @@ local function CreateCommand()
     end
 
     function ulx.cslays(calling_ply, target)
-        local data = sql.QueryRow("SELECT * FROM damagelog_autoslay WHERE ply = '" .. target:SteamID() .. "' LIMIT 1")
+        Damagelog.queries.SelectAutoSlayAll:setString(1, target:StramID())
+        Damagelog.queries.SelectAutoSlayAll:start()
+        local data = Damagelog.queries.SelectAutoSlayAll:getData()
         local txt = aslay and "slays" or "jails"
         local p = "has"
 
@@ -54,7 +56,9 @@ local function CreateCommand()
             return
         end
 
-        local data = sql.QueryRow("SELECT * FROM damagelog_autoslay WHERE ply = '" .. steamid .. "' LIMIT 1")
+        Damagelog.queries.SelectAutoSlayAll:setString(1, steamid)
+        Damagelog.queries.SelectAutoSlayAll:start()
+        local data = Damagelog.queries.SelectAutoSlayAll:getData()
         local txt = aslay and "slays" or "jails"
 
         if data then
