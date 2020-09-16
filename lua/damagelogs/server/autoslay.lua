@@ -12,7 +12,7 @@ end
 local aslay = mode == 1
 
 
-local queries = {
+Damagelog.queries = {
 	NameUpdate = sql:prepare("INSERT INTO `damagelog_names` (`steamid`, `name`) VALUES(?, ?) ON DUPLICATE KEY UPDATE `name` = ?;"),
 	SelectName = sql:prepare("SELECT `name` FROM `damagelog_names` WHERE `steamid` = ? LIMIT 1;"),
 	SelectAutoSlays = sql:prepare("SELECT IFNULL((SELECT `slays` FROM `damagelog_autoslay` WHERE `ply` = ?), '0');"),
@@ -54,10 +54,10 @@ local function damagelogNames(ply, steamid)
 
 	--update the players name in the database for logging reasons
 	local name = ply:Nick()
-	queries.NameUpdate:setString(1, steamid)
-	queries.NameUpdate:setString(2, name)
-	queries.NameUpdate:setString(3, name)
-	queries.NameUpdate:start()
+	Damagelog.queries.NameUpdate:setString(1, steamid)
+	Damagelog.queries.NameUpdate:setString(2, name)
+	Damagelog.queries.NameUpdate:setString(3, name)
+	Damagelog.queries.NameUpdate:start()
 
 end
 hook.Add("PlayerAuthed", "DamagelogNames", damagelogNames)
@@ -66,9 +66,9 @@ function Damagelog:GetName(steamid)
 	local ply = player.GetBySteamID(steamid)
 	if ply then return ply end
 
-	queries.SelectName:setString(1, steamid)
-	queries.SelectName:start()
-	return queries.SelectName:getData()
+	self.queries.SelectName:setString(1, steamid)
+	self.queries.SelectName:start()
+	return self.queries.SelectName:getData()
 end
 
 function Damagelog.SlayMessage(ply, message)
@@ -126,8 +126,8 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 	end
 
 	if slays == 0 then
-		queries.DeleteAutoSlay:setString(1, steamid)
-		queries.start()
+		self.queries.DeleteAutoSlay:setString(1, steamid)
+		self.queries.DeleteAutoSlay:start()
 
 		if target then
 			ulx.fancyLogAdmin(admin, aslay and "#A removed the autoslays of #T." or "#A removed the autojails of #T.", target)
@@ -137,8 +137,8 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 
 		NetworkSlays(steamid, 0)
 	else
-		queries.SelectAutoSlayAll:setString(1, steamid)
-		local data = queries.SelectAutoSlayAll:getData()
+		self.queries.SelectAutoSlayAll:setString(1, steamid)
+		local data = self.queries.SelectAutoSlayAll:getData()
 
 		if data then
 			local adminid
@@ -180,12 +180,12 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 				end
 			else
 				local difference = slays - old_slays
-				queries.UpdateAutoSlay:setString(1, new_admins)
-				queries.UpdateAutoSlay:setNumber(2, slays)
-				queries.UpdateAutoSlay:setString(3, reason)
-				queries.UpdateAutoSlay:setString(4, tostring(os.time()))
-				queries.UpdateAutoSlay:setString(5, steamid)
-				queries.UpdateAutoSlay:start()
+				self.queries.UpdateAutoSlay:setString(1, new_admins)
+				self.queries.UpdateAutoSlay:setNumber(2, slays)
+				self.queries.UpdateAutoSlay:setString(3, reason)
+				self.queries.UpdateAutoSlay:setString(4, tostring(os.time()))
+				self.queries.UpdateAutoSlay:setString(5, steamid)
+				self.queries.UpdateAutoSlay:start()
 				local list = self:CreateSlayList(old_steamids)
 				local msg
 
@@ -218,12 +218,12 @@ function Damagelog:SetSlays(admin, steamid, slays, reason, target)
 				admins = util.TableToJSON({"Console"})
 			end
 
-			queries.InsertAutoSlay:setString(1, admins)
-			queries.InsertAutoSlay:setString(2, steamid)
-			queries.InsertAutoSlay:setNumber(3, slays)
-			queries.InsertAutoSlay:setString(4, reason)
-			queries.InsertAutoSlay:setString(5, tostring(os.time()))
-			queries.InsertAutoSlay:start()
+			self.queries.InsertAutoSlay:setString(1, admins)
+			self.queries.InsertAutoSlay:setString(2, steamid)
+			self.queries.InsertAutoSlay:setNumber(3, slays)
+			self.queries.InsertAutoSlay:setString(4, reason)
+			self.queries.InsertAutoSlay:setString(5, tostring(os.time()))
+			self.queries.InsertAutoSlay:start()
 
 			local msg
 
@@ -302,8 +302,8 @@ hook.Add("TTTBeginRound", "Damagelog_AutoSlay", function()
 				v:SetNWBool("PlayedSRound", true)
 			end)
 
-			queries.SelectAutoSlayAll:setString(1, v:SteamID())
-			local data = queries.SelectAutoSlayAll:getData()
+			Damagelog.queries.SelectAutoSlayAll:setString(1, v:SteamID())
+			local data = Damagelog.queries.SelectAutoSlayAll:getData()
 
 			if data then
 				if aslay then
@@ -373,13 +373,13 @@ hook.Add("TTTBeginRound", "Damagelog_AutoSlay", function()
 				slays = slays - 1
 
 				if slays <= 0 then
-					queries.DeleteAutoSlay:setString(1, v:SteamID())
-					queries.DeleteAutoSlay:start()
+					Damagelog.queries.DeleteAutoSlay:setString(1, v:SteamID())
+					Damagelog.queries.DeleteAutoSlay:start()
 					NetworkSlays(steamid, 0)
 					v.AutoslaysLeft = 0
 				else
-					queries.DecrementAutoSlay:setString(1, v:SteamID())
-					queries.DecrementAutoSlay:start()
+					Damagelog.queries.DecrementAutoSlay:setString(1, v:SteamID())
+					Damagelog.queries.DecrementAutoSlay:start()
 					NetworkSlays(steamid, slays - 1)
 
 					if tonumber(v.AutoslaysLeft) then
