@@ -5,7 +5,7 @@ util.AddNetworkString("DL_SendLogsList")
 util.AddNetworkString("DL_AskOldLogRounds")
 util.AddNetworkString("DL_SendOldLogRounds")
 Damagelog.previous_reports = {}
-local limit = os.time() - Damagelog.LogDays * 86400 --  24 * 60 * 60
+
 
 require("mysqloo")
 include("damagelogs/config/mysqloo.lua")
@@ -15,86 +15,83 @@ local info = Damagelog.MySQL_Informations
 Damagelog.database = mysqloo.connect(info.ip, info.username, info.password, info.database, info.port)
 
 Damagelog.database.onConnected = function(self)
-Damagelog.MySQL_Connected = true
-local create_table1 = self:query([[
-    CREATE TABLE IF NOT EXISTS damagelog_autoslay (
-    ply varchar(32) NOT NULL UNIQUE,
-    admins tinytext NOT NULL,
-    slays SMALLINT UNSIGNED NOT NULL,
-    reason tinytext NOT NULL,
-    time BIGINT UNSIGNED NOT NULL);
 
-    CREATE TABLE IF NOT EXISTS damagelog_names (
-    steamid varchar(32) NOT NULL UNIQUE,
-    name varchar(255) NOT NULL
-    );
+    Damagelog.MySQL_Connected = true
+    local create_table1 = self:query([[
+        CREATE TABLE IF NOT EXISTS damagelog_autoslay (
+        ply varchar(32) NOT NULL UNIQUE,
+        admins tinytext NOT NULL,
+        slays SMALLINT UNSIGNED NOT NULL,
+        reason tinytext NOT NULL,
+        time BIGINT UNSIGNED NOT NULL);
 
-    CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
-	id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-	date DATETIME NOT NULL,
-	map TINYTEXT NOT NULL,
-	round TINYINT NOT NULL,
-	damagelog BLOB NOT NULL,
-	PRIMARY KEY (id));
-    
-    CREATE TABLE IF NOT EXISTS damagelog_weapons (
-	class varchar(255) NOT NULL,
-	name varchar(255) NOT NULL,
-	PRIMARY KEY (class));
-]])
-create_table1:start()
-local list = self:query("SELECT MIN(date) as min, MAX(date) as max FROM damagelog_oldlogs_v3;")
+        CREATE TABLE IF NOT EXISTS damagelog_names (
+        steamid varchar(32) NOT NULL UNIQUE,
+        name varchar(255) NOT NULL
+        );
 
-list.onSuccess = function(query)
-    local data = query:getData()
+        CREATE TABLE IF NOT EXISTS damagelog_oldlogs_v3 (
+    	id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    	date DATETIME NOT NULL,
+    	map TINYTEXT NOT NULL,
+    	round TINYINT NOT NULL,
+    	damagelog BLOB NOT NULL,
+    	PRIMARY KEY (id));
+        
+        CREATE TABLE IF NOT EXISTS damagelog_weapons (
+    	class varchar(255) NOT NULL,
+    	name varchar(255) NOT NULL,
+    	PRIMARY KEY (class));
+    ]])
+    create_table1:start()
+    local list = self:query("SELECT MIN(date) as min, MAX(date) as max FROM damagelog_oldlogs_v3;")
+    list.onSuccess = function(query)
+        local data = query:getData()
 
-    if not data[1] then
-        return
-    end
-
-    Damagelog.OlderDate = data[1]["min"]
-    Damagelog.LatestDate = data[1]["max"]
-end
-list:start()
-local delete_old = self:query("DELETE FROM damagelog_oldlogs_v3 WHERE date <= " .. limit .. ";")
-delete_old:start()
-Damagelog.OldLogsDays = {}
-
-Damagelog.database.onConnectionFailed = function(self, err)
-    file.Write("damagelog/mysql_error.txt", err)
-    Damagelog.MySQL_Error = err
-end
-
-Damagelog.database:connect()
-
-
-if file.Exists("damagelog/damagelog_lastroundmap.txt", "DATA") then
-    Damagelog.last_round_map = tonumber(file.Read("damagelog/damagelog_lastroundmap.txt", "DATA"))
-    file.Delete("damagelog/damagelog_lastroundmap.txt")
-end
-
-hook.Add("TTTEndRound", "Damagelog_EndRound", function()
-    if Damagelog.DamageTable and Damagelog.ShootTables and Damagelog.ShootTables[Damagelog.CurrentRound] then
-        local logs = {
-            DamageTable = Damagelog.DamageTable,
-            ShootTable = Damagelog.ShootTables[Damagelog.CurrentRound],
-            Roles = Damagelog.Roles[Damagelog.CurrentRound]
-        }
-
-        logs = util.TableToJSON(logs)
-        local t = os.time()
-        local year = tonumber(os.date("%y"))
-        local month = tonumber(os.date("%m"))
-        local day = tonumber(os.date("%d"))
-
-        if Damagelog.MySQL_Connected then
-            local insert = string.format("INSERT INTO damagelog_oldlogs_v3(`year`, `month`, `day`, `date`, `round`, `map`, `damagelog`) VALUES(%i, %i, %i, %i, %i, \"%s\", COMPRESS(%s));", year, month, day, t, Damagelog.CurrentRound, game.GetMap(), sql.SQLStr(logs))
-            local query = Damagelog.database:query(insert)
-            query:start()
+        if not data[1] then
+            return
         end
-        file.Write("damagelog/damagelog_lastroundmap.txt", tostring(t))
+
+        Damagelog.OlderDate = data[1]["min"]
+        Damagelog.LatestDate = data[1]["max"]
     end
-end)
+    list:start()
+
+    Damagelog.OldLogsDays = {}
+
+    Damagelog.database.onConnectionFailed = function(self, err)
+        file.Write("damagelog/mysql_error.txt", err)
+        Damagelog.MySQL_Error = err
+    end
+    Damagelog.database:connect()
+
+
+    if file.Exists("damagelog/damagelog_lastroundmap.txt", "DATA") then
+        Damagelog.last_round_map = tonumber(file.Read("damagelog/damagelog_lastroundmap.txt", "DATA"))
+        file.Delete("damagelog/damagelog_lastroundmap.txt")
+    end
+
+    hook.Add("TTTEndRound", "Damagelog_EndRound", function()
+        if Damagelog.DamageTable and Damagelog.ShootTables and Damagelog.ShootTables[Damagelog.CurrentRound] then
+            local logs = {
+                DamageTable = Damagelog.DamageTable,
+                ShootTable = Damagelog.ShootTables[Damagelog.CurrentRound],
+                Roles = Damagelog.Roles[Damagelog.CurrentRound]
+            }
+
+            logs = util.TableToJSON(logs)
+            local t = os.time()
+
+            if Damagelog.MySQL_Connected then
+                Damagelog.queries.InsertOldLogs:setNumber(1, t)
+                Damagelog.queries.InsertOldLogs:setNumber(2, Damagelog.CurrentRound)
+                Damagelog.queries.InsertOldLogs:setString(3, game.GetMap())
+                Damagelog.queries.InsertOldLogs:setString(4, logs)
+                Damagelog.queries.InsertOldLogs:start()
+            end
+            file.Write("damagelog/damagelog_lastroundmap.txt", tostring(t))
+        end
+    end)
 
 net.Receive("DL_AskLogsList", function(_, ply)
     net.Start("DL_SendLogsList")
